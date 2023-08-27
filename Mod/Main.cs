@@ -11,8 +11,8 @@ using System.Security.Principal;
 using UnityEngine;
 using UnityModManagerNet;
 using HarmonyLib;
-using Kingmaker.Blueprints;
 using Kingmaker;
+using Kingmaker.Blueprints;
 using Kingmaker.Utility;
 using MoreVoiceLines.IPC;
 
@@ -33,6 +33,8 @@ namespace MoreVoiceLines
             modEntry.OnGUI = OnGUI;
             modEntry.OnSaveGUI = OnSaveGUI;
 
+            guiSelectedPathOrUUID = Path.Combine(GetDirectory(), "test", "Prologue_Jaethal_01.wav");
+
             InitializePlayer();
             LoadAudioMetadata();
 
@@ -48,14 +50,10 @@ namespace MoreVoiceLines
             return true;
         }
 
+        static string guiSelectedPathOrUUID = "";
+
         static void OnGUI(UnityModManager.ModEntry modEntry)
         {
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Debug logging", GUILayout.ExpandWidth(false));
-            GUILayout.Space(10);
-            Settings.Debug = GUILayout.Toggle(Settings.Debug, $" {Settings.Debug}", GUILayout.ExpandWidth(false));
-            GUILayout.EndHorizontal();
-
             GUILayout.BeginHorizontal();
             GUILayout.Label("Volume", GUILayout.ExpandWidth(false));
             GUILayout.Space(10);
@@ -77,36 +75,70 @@ namespace MoreVoiceLines
             //GUILayout.Label($" {Settings.Pitch:p0}", GUILayout.ExpandWidth(false));
             //GUILayout.EndHorizontal();
 
-            //GUILayout.BeginHorizontal();
-            //GUILayout.Label("MyTextOption", GUILayout.ExpandWidth(false));
-            //GUILayout.Space(10);
-            //Settings.MyTextOption = GUILayout.TextField(Settings.MyTextOption, GUILayout.Width(300f));
-            //GUILayout.EndHorizontal();
-
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Play random cue"))
+            GUILayout.Label(new GUIContent("Play", "Provide path to play audio from file, or UUID to play voice line recipe"), GUILayout.ExpandWidth(false));
+            guiSelectedPathOrUUID = GUILayout.TextField(guiSelectedPathOrUUID, GUILayout.MinWidth(200f));
+            if (GUILayout.Button("Random", GUILayout.ExpandWidth(false)))
             {
-                // TODO: allow to play selected piece (typed in by ID), preview the raw text & recipe too
-                var uuid = knownLocalizedStringUUIDs.Random();
-                TryPlayVoiceOver(uuid, null);
+                guiSelectedPathOrUUID = knownLocalizedStringUUIDs.Random();
             }
-            if (GUILayout.Button("Stop"))
+            GUI_PlayButton();
+            if (GUILayout.Button("Stop", GUILayout.ExpandWidth(false)))
             {
                 StopAudio();
             }
-            if (Settings.Debug)
-            {
-                if (GUILayout.Button("Play test audio"))
-                {
-                    PlayAudio(Path.Combine(GetDirectory(), "test", "Prologue_Jaethal_01.wav"));
-                }
-            }
             GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Debug (might require restart)", GUILayout.ExpandWidth(false));
+            GUILayout.Space(10);
+            Settings.Debug = GUILayout.Toggle(Settings.Debug, $" {Settings.Debug}", GUILayout.ExpandWidth(false));
+            GUILayout.EndHorizontal();
+        }
+
+        static void GUI_PlayButton()
+        {
+            // Try as path
+            string path;
+            try
+            {
+                path = Path.GetFullPath(guiSelectedPathOrUUID);
+                if (!File.Exists(path)) path = null;
+            }
+            catch
+            {
+                path = null;
+            }
+            if (path != null) {
+                if (GUILayout.Button("Play", GUILayout.ExpandWidth(false)))
+                {
+                    PlayAudio(path);
+                }
+                return;
+            }
+            
+            // Try as UUID
+            var uuid = guiSelectedPathOrUUID.ToLower();
+            if (knownLocalizedStringUUIDs.Contains(uuid))
+            {
+                if (GUILayout.Button("Play", GUILayout.ExpandWidth(false)))
+                {
+                    PlayRecipe(uuid);
+                }
+                return;
+            }
+
+            // Or disable the button
+            GUI.enabled = false;
+            GUILayout.Button(new GUIContent("Play", "Invalid path or unknow UUID."), GUILayout.ExpandWidth(false));
+            GUI.enabled = true;
         }
 
         static void OnSaveGUI(UnityModManager.ModEntry modEntry)
         {
             Settings.Save(modEntry);
+
+            new MessageWriteable(MessageType.SettingsUpdated).TrySend(playerPipeClient);
         }
 
         static string GetDirectory()
@@ -289,12 +321,15 @@ namespace MoreVoiceLines
         {
             Log($"Playing recipe for UUID '{uuid}'");
 
-            var playerUnit = Game.Instance.DialogController.ActingUnit ?? Game.Instance.Player.MainCharacter;
+            var playerUnit = Game.Instance.DialogController?.ActingUnit ?? Game.Instance.Player?.MainCharacter;
+            var gender = playerUnit == null 
+                ? (new System.Random().Next(2) == 0 ? Gender.Male : Gender.Female)
+                : playerUnit.Gender;
 
             using var message = new MessageWriteable(MessageType.PlayRecipe);
             message.Write(uuid);
+            message.Write((int)gender);
             message.Write(Game.Instance.Player.PlayerIsKing);
-            message.Write(playerUnit.Gender == Gender.Male);
             message.TrySend(playerPipeClient);
         }
 

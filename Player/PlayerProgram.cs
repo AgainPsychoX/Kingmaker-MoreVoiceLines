@@ -134,6 +134,14 @@ namespace MoreVoiceLines
                     audioCancellationTokenSource.Cancel();
                     return;
                 case MessageType.PlayRecipe:
+                    audioCancellationTokenSource.Cancel();
+                    audioCancellationTokenSource = new CancellationTokenSource();
+                    {
+                        string uuid = message.ReadString();
+                        Gender gender = (Gender)message.ReadInt32();
+                        bool isKingdom = message.ReadBoolean();
+                        _ = PlayRecipe(uuid, gender, isKingdom, audioCancellationTokenSource.Token);
+                    }
                     return;
                 case MessageType.StopRecipe:
                     audioCancellationTokenSource.Cancel();
@@ -171,18 +179,21 @@ namespace MoreVoiceLines
                     {
                         await Task.Delay(audioReader.TotalTime, cancellationToken);
                     }
-                    catch (TaskCanceledException)
+                    finally
                     {
-                        LogDebug($"Cancelled");
+                        audioPlaybackEngine.RemoveMixerInput(thing);
                     }
-                    audioPlaybackEngine.RemoveMixerInput(thing);
                 }
 
-                if (!cancellationToken.IsCancellationRequested && gamePipeClient != null && gamePipeClient.IsConnected)
+                if (gamePipeClient != null && gamePipeClient.IsConnected)
                 {
                     LogDebug($"Sending FinishedAudio notification");
                     new MessageWriteable(MessageType.FinishedAudio, 0).TrySend(gamePipeClient);
                 }
+            }
+            catch (TaskCanceledException)
+            {
+                LogDebug($"Cancelled");
             }
             catch (Exception ex)
             {
@@ -191,67 +202,81 @@ namespace MoreVoiceLines
             }
         }
 
-        //static IEnumerator<Task> PlayingRecipe(string uuid, string recipe)
-        //{
-        //    LogDebug($"Playing voice for LocalizedString of UUID: '{uuid}' using recipe '{recipe}'");
-        //    foreach (var recipePart in recipe.Split('+'))
-        //    {
-        //        string partSpecifier = null;
-        //        switch (recipePart[0])
-        //        {
-        //            case 'd': /* delay */
-        //                var milliseconds = int.Parse(recipePart.Substring(1));
-        //                LogDebug($"PlayingAudio: Waiting for {milliseconds}ms");
-        //                yield return Task.Delay(milliseconds, cancellationToken);
-        //                break;
-        //            case 'p': /* part */
-        //                partSpecifier = recipePart.Substring(1);
-        //                break;
-        //            case 's': /* female/male */
-        //                partSpecifier = recipePart.Substring(1) + '_' + (playerUnit.Gender == Gender.Male ? 'm' : 'f');
-        //                break;
-        //            case 'e': /* barony/kingdom */
-        //                partSpecifier = recipePart.Substring(1) + '_' + (Game.Instance.Player.PlayerIsKing ? 'b' : 'k');
-        //                break;
-        //            case 'x': /* female/male + barony/kingdom */
-        //                partSpecifier = recipePart.Substring(1) + '_' + (playerUnit.Gender == Gender.Male ? 'm' : 'f') + (Game.Instance.Player.PlayerIsKing ? 'b' : 'k');
-        //                break;
-        //            case 'n': /* name */
-        //            case 'r': /* race */
-        //            case 'k': /* kingdom name */
-        //                // Not implemented yet, recipe should not use those.
-        //                // The prepared audio files can have the variables baked in the audio anyway.
-        //                LogWarning($"Recipe part '{recipePart[0]}' not implemented, skipping");
-        //                break;
-        //            default:
-        //                LogWarning($"Unknown recipe part '{recipePart[0]}', skipping");
-        //                break;
-        //        }
-        //        if (partSpecifier == null)
-        //        {
-        //            continue;
-        //        }
+        /// <summary>
+        /// Gender enum, should be exactly like `Kingmaker.Blueprints.Gender`.
+        /// </summary>
+        internal enum Gender
+        {
+            Male,
+            Female
+        }
 
-        //        var fileName = uuid + '_' + partSpecifier + ".wav";
-        //        var path = Path.Combine(ModEntry.Path, "audio", fileName);
-        //        if (!File.Exists(path))
-        //        {
-        //            LogError($"Missing file '{fileName}', skipping");
-        //            continue;
-        //        }
+        static async Task PlayRecipe(string uuid, Gender rulerGender, bool isKingdom, CancellationToken cancellationToken)
+        {
+            try
+            {
+                LogDebug($"PlayRecipe uuid='{uuid}', rulerGender={rulerGender}, isKingdom={isKingdom}");
 
-        //        using (var audioFile = new WaveFileReader(path))
-        //        {
-        //            outputDevice.Init(audioFile);
-        //            outputDevice.Play();
-        //            yield return new WaitForSeconds((float)audioFile.TotalTime.TotalSeconds);
-        //        }
-        //    }
-        //    //if (onEnd != null)
-        //    //{
-        //    //    onEnd(null, null);
-        //    //    onEnd = null;
-        //    //}
-        //}
+                string? recipe;
+                if (!localizedStringUuidToRecipe.TryGetValue(uuid, out recipe))
+                {
+                    throw new Exception("Recipe not found for given localized string UUID");
+                }
+
+                foreach (var recipePart in recipe.Split('+'))
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        throw new TaskCanceledException();
+                    }
+                    
+                    string partSpecifier;
+                    switch (recipePart[0])
+                    {
+                        case 'd': /* delay */
+                            var milliseconds = int.Parse(recipePart.Substring(1));
+                            LogDebug($"Playing recipe: Waiting for {milliseconds}ms");
+                            await Task.Delay(milliseconds, cancellationToken);
+                            continue;
+                        case 'p': /* part */
+                            partSpecifier = recipePart[1..];
+                            break;
+                        case 's': /* female/male */
+                            partSpecifier = recipePart[1..] + '_' + (rulerGender == Gender.Male ? 'm' : 'f');
+                            break;
+                        case 'e': /* barony/kingdom */
+                            partSpecifier = recipePart[1..] + '_' + (isKingdom ? 'k' : 'b');
+                            break;
+                        case 'x': /* female/male + barony/kingdom */
+                            partSpecifier = recipePart[1..] + '_' + (rulerGender == Gender.Male ? 'm' : 'f') + (isKingdom ? 'k' : 'b');
+                            break;
+                        case 'n': /* name */
+                        case 'r': /* race */
+                        case 'k': /* kingdom name */
+                            // Not implemented yet, recipe should not use those.
+                            // The prepared audio files can have the variables baked in the audio anyway.
+                            LogWarning($"Playing recipe: Part '{recipePart[0]}' not implemented, skipping");
+                            continue; // to next part
+                        default:
+                            LogWarning($"Playing recipe: Unknown part '{recipePart[0]}', skipping");
+                            continue; // to next part
+                    }
+
+                    var fileName = uuid + '_' + partSpecifier + ".wav";
+                    var path = Path.Combine(GetDirectory(), "../audio", fileName);
+                    await PlayAudio(path, cancellationToken);
+                }
+            }
+            catch (TaskCanceledException)
+            {
+                LogDebug($"Cancelled");
+
+            }
+            catch (Exception ex)
+            {
+                LogError("Error playing recipe");
+                LogException(ex);
+            }
+        }
     }
 }
