@@ -1,0 +1,38 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.7.34009.444
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MoreVoiceLines", "Mod\MoreVoiceLines.csproj", "{B3061024-55A2-45FB-9A94-F74416F1F6EE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MoreVoiceLinesPlayer", "Player\MoreVoiceLinesPlayer.csproj", "{B6254E4F-8000-440E-9161-5066C37E75D5}"
+EndProject
+Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "MoreVoiceLinesShared", "Shared\MoreVoiceLinesShared.shproj", "{7C4280EB-F254-477C-92EC-650BB6B52529}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B3061024-55A2-45FB-9A94-F74416F1F6EE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B3061024-55A2-45FB-9A94-F74416F1F6EE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B3061024-55A2-45FB-9A94-F74416F1F6EE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B3061024-55A2-45FB-9A94-F74416F1F6EE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B6254E4F-8000-440E-9161-5066C37E75D5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B6254E4F-8000-440E-9161-5066C37E75D5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B6254E4F-8000-440E-9161-5066C37E75D5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B6254E4F-8000-440E-9161-5066C37E75D5}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {F2457C80-115F-4BF7-88A6-849614D684AE}
+	EndGlobalSection
+	GlobalSection(SharedMSBuildProjectFiles) = preSolution
+		Shared\MoreVoiceLinesShared.projitems*{7c4280eb-f254-477c-92ec-650bb6b52529}*SharedItemsImports = 13
+		Shared\MoreVoiceLinesShared.projitems*{b3061024-55a2-45fb-9a94-f74416f1f6ee}*SharedItemsImports = 5
+		Shared\MoreVoiceLinesShared.projitems*{b6254e4f-8000-440e-9161-5066c37e75d5}*SharedItemsImports = 5
+	EndGlobalSection
+EndGlobal

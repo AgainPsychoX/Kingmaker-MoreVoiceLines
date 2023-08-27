@@ -1,0 +1,11 @@
+﻿{
+  "Id": "MoreVoiceLines",
+  "DisplayName": "MoreVoiceLines",
+  "Description": "Adds some more voice lines for companions, currently only Jaethal.",
+  "Author": "AgainPsychoX",
+  "Version": "1.0.0",
+  "ManagerVersion": "0.21.3",
+  "Requirements": [],
+  "AssemblyName": "MoreVoiceLines.dll",
+  "EntryMethod": "MoreVoiceLines.MoreVoiceLines.Load"
+}
