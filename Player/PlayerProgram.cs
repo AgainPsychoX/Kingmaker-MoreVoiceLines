@@ -34,9 +34,13 @@ namespace MoreVoiceLines
         {        
             settings = PlayerSettings.Load();
 
+            if (!settings.Debug)
+            {
+                ConsoleWindowUtils.Hide();
+            }
+
             // TODO: keep only one instance alive
             // TODO: suicide if no comms from the mod
-            // TODO: hide the player console (if setting set so)
 
             // Load dialog UUID to recipe mapping
             localizedStringUuidToRecipe.Clear();

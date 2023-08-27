@@ -22,8 +22,8 @@ This is modification for [Pathfinder: Kingmaker](https://store.steampowered.com/
 
 ### To-do
 
++ Replace dialogues referencing player character name by something more generic (for now it's fixed to use my character Elizabeth).
 + External audio player
-    + Hide the console window
     + Ensure single instance
 	+ Kill after game exits
 	+ Allow restart while in-game?
