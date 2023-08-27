@@ -179,7 +179,7 @@ namespace MoreVoiceLines
                 Log($"Audio player pipe connected");
 
                 // Open the server pipe to get notified about stuff, like audio finishing
-                gamePipeServer = new NamedPipeServerStream("MoreVoiceLines", PipeDirection.InOut); // Beware! Async pipes are bugged so hard, fucking Unity...
+                gamePipeServer = new NamedPipeServerStream("MoreVoiceLines", PipeDirection.InOut); // Beware! Async pipes are bugged/not implemented, fucking Unity...
                 Log("Game-side pipe server started");
                 gamePipeServer.WaitForConnection();
                 if (gamePipeServer.IsConnected)
@@ -278,20 +278,16 @@ namespace MoreVoiceLines
 
         public static void PlayAudio(string path)
         {
-            LogDebug($"Playing audio from path '{path}'");
+            Log($"Playing audio from path '{path}'");
 
             using var message = new MessageWriteable(MessageType.PlayAudio);
             message.Write(path);
-            if (!message.TrySend(playerPipeClient))
-            {
-                LogWarning($"Failed to send message to audio player");
-                LogDebug($"fail? {playerPipeClient == null} || {!playerPipeClient.CanWrite} || {!playerPipeClient.IsConnected}");
-            }
+            message.TrySend(playerPipeClient);
         }
 
         public static void PlayRecipe(string uuid)
         {
-            LogDebug($"Playing recipe for UUID '{uuid}'");
+            Log($"Playing recipe for UUID '{uuid}'");
 
             var playerUnit = Game.Instance.DialogController.ActingUnit ?? Game.Instance.Player.MainCharacter;
 
@@ -304,7 +300,7 @@ namespace MoreVoiceLines
 
         public static void StopAudio()
         {
-            LogDebug($"Stoping audio (and recipe)");
+            Log($"Stoping audio (and recipe)");
 
             new MessageWriteable(MessageType.StopAudio).TrySend(playerPipeClient);
 

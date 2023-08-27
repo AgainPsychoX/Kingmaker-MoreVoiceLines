@@ -26,16 +26,12 @@ namespace MoreVoiceLines
         static PlayerSettings settings = new();
         static readonly Dictionary<string, string> localizedStringUuidToRecipe = new();
         static readonly AudioPlaybackEngine audioPlaybackEngine = new(44100, 1);
-        //static IWavePlayer audioOutputDevice = new WaveOut();
         static CancellationTokenSource audioCancellationTokenSource = new();
         static NamedPipeServerStream? pipeServer;
         static NamedPipeClientStream? gamePipeClient;
 
         static async Task Main(string[] args)
-        {
-            //await PlayAudio("G:\\Steam\\steamapps\\common\\Pathfinder Kingmaker\\Mods\\MoreVoiceLines\\test\\Prologue_Jaethal_01.wav", audioCancellationTokenSource.Token);
-            //await Task.Delay(300); // default latency
-         
+        {        
             settings = PlayerSettings.Load();
 
             // TODO: keep only one instance alive
@@ -184,7 +180,7 @@ namespace MoreVoiceLines
 
                 if (!cancellationToken.IsCancellationRequested && gamePipeClient != null && gamePipeClient.IsConnected)
                 {
-                    LogDebug($"BBBBBBBBBBBBBBBBB");
+                    LogDebug($"Sending FinishedAudio notification");
                     new MessageWriteable(MessageType.FinishedAudio, 0).TrySend(gamePipeClient);
                 }
             }

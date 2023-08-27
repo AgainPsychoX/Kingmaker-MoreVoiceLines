@@ -5,9 +5,14 @@ VisualStudioVersion = 17.7.34009.444
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MoreVoiceLines", "Mod\MoreVoiceLines.csproj", "{B3061024-55A2-45FB-9A94-F74416F1F6EE}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MoreVoiceLinesPlayer", "Player\MoreVoiceLinesPlayer.csproj", "{B6254E4F-8000-440E-9161-5066C37E75D5}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MoreVoiceLinesPlayer", "Player\MoreVoiceLinesPlayer.csproj", "{B6254E4F-8000-440E-9161-5066C37E75D5}"
 EndProject
 Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "MoreVoiceLinesShared", "Shared\MoreVoiceLinesShared.shproj", "{7C4280EB-F254-477C-92EC-650BB6B52529}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{C276B5C7-2290-4B65-8839-C37F0AD6E1A0}"
+	ProjectSection(SolutionItems) = preProject
+		README.md = README.md
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
