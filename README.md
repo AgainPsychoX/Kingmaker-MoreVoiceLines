@@ -22,9 +22,6 @@ This is modification for [Pathfinder: Kingmaker](https://store.steampowered.com/
 
 ### To-do
 
-+ Execute "recipe" - few scheduled audio files together that form actual full voice line.
-+ Fix mod manager GUI a bit
-+ Testing 
 + External audio player
     + Hide the console window
     + Ensure single instance

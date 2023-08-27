@@ -7,5 +7,6 @@
   "ManagerVersion": "0.21.3",
   "Requirements": [],
   "AssemblyName": "MoreVoiceLines.dll",
-  "EntryMethod": "MoreVoiceLines.MoreVoiceLines.Load"
+  "EntryMethod": "MoreVoiceLines.MoreVoiceLines.Load",
+  "HomePage": "https://github.com/AgainPsychoX/Kingmaker-MoreVoiceLines"
 }
