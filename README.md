@@ -8,7 +8,7 @@ This is modification for [Pathfinder: Kingmaker](https://store.steampowered.com/
 ## Notes
 
 + Voice over requests from game are detected by `LocalizedString.PlayVoiceOver` patch. We map those strings UUIDs to audio files, with special "recipe" that describes which actual files are to be used, in what order. Some suffixes are expected for sex or kingdom status dependent dialogues.
-+ Audio files should be placed in `audio` directory inside mod directory. I used AU generated samples with 44100 Hz sample rate single channel (mono), but the mod can also play any other sample rate and stereo (might require tweaking the `AudioPlaybackEngine` instance on audio player side for better performance).
++ Audio files should be placed in `audio` directory inside mod directory. I used AI generated samples with 44100 Hz sample rate single channel (mono), but the mod can also play any other sample rate and stereo (might require tweaking the `AudioPlaybackEngine` instance on audio player side for better performance).
 + Next to the `audio` folder there should be `audio_metadata.csv`, `|` separated file with columns: `LocalizedStringUUID`, `Companion` (unused actually), `Recipe` and `RawText` (also unused). 
 + **Modification uses external executable** (outside the game) for playing the sound, sources are of course included in the repository.
 	+ I couldn't get Unity [`AudioClip`](https://docs.unity3d.com/ScriptReference/AudioClip.html) to work
@@ -22,13 +22,12 @@ This is modification for [Pathfinder: Kingmaker](https://store.steampowered.com/
 
 ### To-do
 
++ Add detecting missing dialogues to the mod; save to file and keep showing "notification" on the mod settings asking user to upload their logs/update the mod.
 + Replace dialogues referencing player character name by something more generic (for now it's fixed to use my character Elizabeth).
 + External audio player
-    + Ensure single instance
+    + Ensure single instance (already can be done by the game-side)
 	+ Kill after game exits
-	+ Allow restart while in-game?
-+ Make write up about my endeavours AI generating voice, include scripts used too.
-+ Release first version (with Jaethal AI generated voice).
+	+ Allow restart while in-game? WIP
 + Add pitch setting
 + Add speed setting
 + Allow skip part of the voice line using space, if possible using speed up

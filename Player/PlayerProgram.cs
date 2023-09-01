@@ -6,7 +6,7 @@ using System.Security.Principal;
 using System.Threading;
 using NAudio.Wave;
 using MoreVoiceLines.IPC;
-using NAudio.Wave.SampleProviders;
+using System.Diagnostics;
 
 namespace MoreVoiceLines
 {
@@ -27,17 +27,13 @@ namespace MoreVoiceLines
         static readonly Dictionary<string, string> localizedStringUuidToRecipe = new();
         static readonly AudioPlaybackEngine audioPlaybackEngine = new(44100, 1);
         static CancellationTokenSource audioCancellationTokenSource = new();
+        static CancellationTokenSource serverCancellationTokenSource = new();
         static NamedPipeServerStream? pipeServer;
         static NamedPipeClientStream? gamePipeClient;
 
         static async Task Main(string[] args)
         {        
             settings = PlayerSettings.Load();
-
-            if (!settings.Debug)
-            {
-                ConsoleWindowUtils.Hide();
-            }
 
             // TODO: keep only one instance alive
             // TODO: suicide if no comms from the mod
@@ -64,38 +60,40 @@ namespace MoreVoiceLines
             Log("Game-side connected");
 
             // Connect to game-side to notify about stuff, like audio finished
-            await Task.Delay(500);
-            gamePipeClient = new(".", "MoreVoiceLines", PipeDirection.InOut, PipeOptions.Asynchronous, TokenImpersonationLevel.None);
-            LogDebug($"Trying to connect to game-side client pipe...");
-            int retryAttempt = 0;
-            int maxRetries = 10;
-            while (!gamePipeClient.IsConnected)
             {
-                try
+                //await Task.Delay(500);
+                gamePipeClient = new(".", "MoreVoiceLines", PipeDirection.InOut, PipeOptions.Asynchronous, TokenImpersonationLevel.None);
+                Log($"Trying to connect to game-side client pipe...");
+                var stopwatch = Stopwatch.StartNew();
+                while (!gamePipeClient.IsConnected)
                 {
-                    await Task.Delay(100); // wait a bit to make sure to game-side is ready
-                    await gamePipeClient.ConnectAsync(100);
-                }
-                catch (Exception ex)
-                {
-                    LogDebug($"Failed to connect to game-side client pipe ({++retryAttempt} / {maxRetries})");
-                    if (retryAttempt > maxRetries)
+                    try
                     {
-                        LogError($"Failed to connect game-side client pipe");
-                        LogException(ex);
-                        break;
+                        await Task.Delay(100);
+                        await gamePipeClient.ConnectAsync(100);
+                    }
+                    catch (Exception ex)
+                    {
+                        LogDebug($"Failed to connect to game-side client pipe ({stopwatch.ElapsedMilliseconds}ms)");
+                        if (stopwatch.ElapsedMilliseconds > 5000)
+                        {
+                            LogError($"Failed to connect game-side client pipe");
+                            LogException(ex);
+                            break;
+                        }
                     }
                 }
-            }
-            if (gamePipeClient.IsConnected)
-            {
-                Log($"Game-side client pipe connected");
+                if (gamePipeClient.IsConnected)
+                {
+                    Log($"Game-side client pipe connected");
+                }
             }
 
             // Handle incoming messages
+            var serverCancellationToken = serverCancellationTokenSource.Token;
             while (pipeServer.IsConnected)
             {
-                await HandleMessage(pipeServer, pipeServer);
+                await HandleMessage(pipeServer, pipeServer, serverCancellationToken);
             }   
 
             pipeServer.Close();
@@ -104,10 +102,10 @@ namespace MoreVoiceLines
             audioPlaybackEngine.Dispose();
         }
 
-        static async Task HandleMessage(Stream input, Stream output)
+        static async Task HandleMessage(Stream input, Stream output, CancellationToken cancellationToken)
         {
             using var message = new MessageReadable();
-            await message.ReceiveAsync(input);
+            await message.ReceiveAsync(input, cancellationToken);
             LogDebug($"Handling message of type {message.Type} and length {message.Length} bytes");
             switch (message.Type)
             {
@@ -221,8 +219,7 @@ namespace MoreVoiceLines
             {
                 LogDebug($"PlayRecipe uuid='{uuid}', rulerGender={rulerGender}, isKingdom={isKingdom}");
 
-                string? recipe;
-                if (!localizedStringUuidToRecipe.TryGetValue(uuid, out recipe))
+                if (!localizedStringUuidToRecipe.TryGetValue(uuid, out string? recipe))
                 {
                     throw new Exception("Recipe not found for given localized string UUID");
                 }
@@ -238,7 +235,7 @@ namespace MoreVoiceLines
                     switch (recipePart[0])
                     {
                         case 'd': /* delay */
-                            var milliseconds = int.Parse(recipePart.Substring(1));
+                            var milliseconds = int.Parse(recipePart[1..]);
                             LogDebug($"Playing recipe: Waiting for {milliseconds}ms");
                             await Task.Delay(milliseconds, cancellationToken);
                             continue;
@@ -270,6 +267,8 @@ namespace MoreVoiceLines
                     var path = Path.Combine(GetDirectory(), "../audio", fileName);
                     await PlayAudio(path, cancellationToken);
                 }
+
+                new MessageWriteable(MessageType.FinishedRecipe, 0).TrySend(gamePipeClient);
             }
             catch (TaskCanceledException)
             {

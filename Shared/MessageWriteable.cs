@@ -31,7 +31,7 @@ namespace MoreVoiceLines.IPC
             {
                 if (value < sizeof(int) * 2)
                 {
-                    throw new ArgumentException();
+                    throw new ArgumentException("Message too short (should be at least 8 for empty message)");
                 }
                 GetMemoryStream().SetLength(value);
             }
@@ -91,7 +91,7 @@ namespace MoreVoiceLines.IPC
             return true;
         }
 
-        public bool TrySend(PipeStream output, bool close = true)
+        public bool TrySend(PipeStream? output, bool close = true)
         {
             if (output == null || !output.CanWrite || !output.IsConnected)
             {

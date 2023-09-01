@@ -1,28 +1,21 @@
 ﻿using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Reflection;
-using System.Diagnostics;
 using System.IO;
-using System.IO.Pipes;
-using System.Threading;
 using System.Threading.Tasks;
-using System.Security.Principal;
 using UnityEngine;
 using UnityModManagerNet;
 using HarmonyLib;
-using Kingmaker;
-using Kingmaker.Blueprints;
 using Kingmaker.Utility;
 using MoreVoiceLines.IPC;
+using System.Collections.Generic;
 
 namespace MoreVoiceLines
 {
     public class MoreVoiceLines
     {
-        public static Settings Settings;
-        public static bool Enabled;
-        public static UnityModManager.ModEntry ModEntry;
+        internal static Settings Settings;
+        internal static bool Enabled;
+        internal static UnityModManager.ModEntry ModEntry;
 
         static bool Load(UnityModManager.ModEntry modEntry)
         {
@@ -35,11 +28,11 @@ namespace MoreVoiceLines
 
             guiSelectedPathOrUUID = Path.Combine(GetDirectory(), "test", "Prologue_Jaethal_01.wav");
 
-            InitializePlayer();
-            LoadAudioMetadata();
-
             var harmony = new Harmony(modEntry.Info.Id);
             harmony.PatchAll(Assembly.GetExecutingAssembly());
+
+            LoadAudioMetadata();
+            Task.Run(ExternalAudioPlayer.Initialize);
 
             return true;
         }
@@ -75,8 +68,12 @@ namespace MoreVoiceLines
             //GUILayout.Label($" {Settings.Pitch:p0}", GUILayout.ExpandWidth(false));
             //GUILayout.EndHorizontal();
 
+            GUILayout.Space(10);
+
             GUILayout.BeginHorizontal();
-            GUILayout.Label(new GUIContent("Play", "Provide path to play audio from file, or UUID to play voice line recipe"), GUILayout.ExpandWidth(false));
+            GUILayout.Label(new GUIContent("Play", 
+                "Provide path to play audio from file, or UUID to play voice line recipe"), 
+                GUILayout.ExpandWidth(false));
             guiSelectedPathOrUUID = GUILayout.TextField(guiSelectedPathOrUUID, GUILayout.MinWidth(200f));
             if (GUILayout.Button("Random", GUILayout.ExpandWidth(false)))
             {
@@ -85,15 +82,40 @@ namespace MoreVoiceLines
             GUI_PlayButton();
             if (GUILayout.Button("Stop", GUILayout.ExpandWidth(false)))
             {
-                StopAudio();
+                ExternalAudioPlayer.StopAudio();
             }
             GUILayout.EndHorizontal();
 
+            GUILayout.Space(10);
+
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Debug (might require restart)", GUILayout.ExpandWidth(false));
+            GUILayout.Label(new GUIContent("Debug mode (might require game restart)", 
+                "Does more debug logging, might produce clog after long gaming sessions.\n"), 
+                GUILayout.ExpandWidth(false));
             GUILayout.Space(10);
             Settings.Debug = GUILayout.Toggle(Settings.Debug, $" {Settings.Debug}", GUILayout.ExpandWidth(false));
             GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Restart audio player", GUILayout.ExpandWidth(false)))
+            {
+                Task.Run(ExternalAudioPlayer.Initialize);
+            }
+            if (GUILayout.Button("Reload audio metadata", GUILayout.ExpandWidth(false)))
+            {
+                LoadAudioMetadata();
+            }
+            GUILayout.EndHorizontal();
+
+            if (Settings.Debug)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Kill all audio player processes on (re)start", GUILayout.ExpandWidth(false));
+                GUILayout.Space(10);
+                Settings.KillAllAudioPlayerProcesses = GUILayout.Toggle(Settings.KillAllAudioPlayerProcesses, 
+                    $" {Settings.KillAllAudioPlayerProcesses}", GUILayout.ExpandWidth(false));
+                GUILayout.EndHorizontal();
+            }
         }
 
         static void GUI_PlayButton()
@@ -112,7 +134,7 @@ namespace MoreVoiceLines
             if (path != null) {
                 if (GUILayout.Button("Play", GUILayout.ExpandWidth(false)))
                 {
-                    PlayAudio(path);
+                    ExternalAudioPlayer.PlayAudio(path);
                 }
                 return;
             }
@@ -123,7 +145,7 @@ namespace MoreVoiceLines
             {
                 if (GUILayout.Button("Play", GUILayout.ExpandWidth(false)))
                 {
-                    PlayRecipe(uuid);
+                    ExternalAudioPlayer.PlayRecipe(uuid);
                 }
                 return;
             }
@@ -137,21 +159,20 @@ namespace MoreVoiceLines
         static void OnSaveGUI(UnityModManager.ModEntry modEntry)
         {
             Settings.Save(modEntry);
-
-            new MessageWriteable(MessageType.SettingsUpdated).TrySend(playerPipeClient);
+            ExternalAudioPlayer.SettingsUpdated();
         }
 
-        static string GetDirectory()
+        internal static string GetDirectory()
         {
             return ModEntry.Path;
         }
 
-        static void LogException(Exception ex) => ModEntry.Logger.LogException(ex);
-        static void LogError(string message) => ModEntry.Logger.Error(message);
-        static void LogWarning(string message) => ModEntry.Logger.Warning(message);
-        static void Log(string message) => ModEntry.Logger.Log(message);
+        internal static void LogException(Exception ex) => ModEntry.Logger.LogException(ex);
+        internal static void LogError(string message) => ModEntry.Logger.Error(message);
+        internal static void LogWarning(string message) => ModEntry.Logger.Warning(message);
+        internal static void Log(string message) => ModEntry.Logger.Log(message);
 
-        static void LogDebug(string message)
+        internal static void LogDebug(string message)
         {
             if (Settings.Debug)
             {
@@ -159,127 +180,13 @@ namespace MoreVoiceLines
             }
         }
 
-        /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+        internal static void LogRaw(string message) => ModEntry.Logger.NativeLog(message);
 
-        static Process playerProcess;
-        static NamedPipeClientStream playerPipeClient;
-        static NamedPipeServerStream gamePipeServer;
 
-        static void InitializePlayer()
-        {            
-            playerProcess?.Kill();
-            playerProcess = Process.Start(Path.Combine(GetDirectory(), "player/MoreVoiceLinesPlayer.exe"));
-            Log($"Started player process ID={playerProcess.Id}");
 
-            Task.Run(IPC);
-
-            // TODO: listen/patch game exit to kill player process
-        }
-
-        static async Task IPC()
-        {
-            Log($"Connecting IPC...");
-
-            try
-            {
-                // Connect to audio player, to request playing audio etc.
-                playerPipeClient = new NamedPipeClientStream(".", "MoreVoiceLinesPlayer", PipeDirection.InOut, PipeOptions.Asynchronous, TokenImpersonationLevel.None);
-                LogDebug($"Trying to connect audio player client pipe...");
-                {
-                    int retryAttempt = 0;
-                    int maxRetries = 10;
-                    while (!playerPipeClient.IsConnected)
-                    {
-                        try
-                        {
-                            await Task.Delay(100); // wait a bit to make sure player process is ready
-                            //await playerPipeClient.ConnectAsync(100); // async not implemented, wtf?
-                            playerPipeClient.Connect(100);
-                        }
-                        catch (Exception ex)
-                        {
-                            LogDebug($"Failed to connect audio player client pipe ({++retryAttempt} / {maxRetries})");
-                            if (retryAttempt > maxRetries)
-                            {
-                                LogError($"Failed to connect audio player client pipe");
-                                LogException(ex);
-                                return;
-                            }
-                        }
-                    }
-                }
-                Log($"Audio player pipe connected");
-
-                // Open the server pipe to get notified about stuff, like audio finishing
-                gamePipeServer = new NamedPipeServerStream("MoreVoiceLines", PipeDirection.InOut); // Beware! Async pipes are bugged/not implemented, fucking Unity...
-                Log("Game-side pipe server started");
-                gamePipeServer.WaitForConnection();
-                if (gamePipeServer.IsConnected)
-                {
-                    throw new Exception("Server pipe not connected after waiting for connection");
-                }
-                Log("Audio player connected");
-
-                while (gamePipeServer.IsConnected)
-                {
-                    await HandleMessage(gamePipeServer, gamePipeServer);
-                }
-            }
-            catch (Exception ex)
-            {
-                LogError("Error in IPC code");
-                LogException(ex);
-
-            }
-        }
-
-        static async Task HandleMessage(Stream input, Stream output)
-        {
-            using var message = new MessageReadable();
-            await message.ReceiveAsync(input);
-            LogDebug($"Handling message of type {message.Type} and length {message.Length} bytes");
-            switch (message.Type)
-            {
-                case MessageType.None:
-                    return;
-                case MessageType.Disconnected:
-                case MessageType.Exit:
-                    playerPipeClient.Close();
-                    gamePipeServer.Disconnect();
-                    return;
-                case MessageType.FinishedAudio:
-                    return;
-                case MessageType.FinishedRecipe:
-                    if (onEnd != null)
-                    {
-                        onEnd(null, null);
-                        onEnd = null;
-                    }
-                    return;
-                case MessageType.EchoResponse:
-                    {
-                        var length = message.ReadUInt16();
-                        var bytes = message.ReadBytes(length);
-                        return;
-                    }
-                case MessageType.EchoRequest:
-                    {
-                        using var writer = new BinaryWriter(message.GetMemoryStream());
-                        writer.BaseStream.Position = 0;
-                        writer.Write((int)MessageType.EchoResponse);
-                        output.Write(message.GetMemoryStream().GetBuffer(), 0, message.Length);
-                        return;
-                    }
-                default:
-                    LogWarning($"Unknown message from game-side module");
-                    return;
-            }
-        }
-
-        /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
         static readonly HashSet<string> knownLocalizedStringUUIDs = new();
-        static EventHandler onEnd = null;
+        internal static EventHandler onEnd = null;
 
         static void LoadAudioMetadata()
         {
@@ -302,48 +209,10 @@ namespace MoreVoiceLines
             if (knownLocalizedStringUUIDs.Contains(localizedStringUUID))
             {
                 onEnd = onEndHandler;
-                PlayRecipe(localizedStringUUID);
+                ExternalAudioPlayer.PlayRecipe(localizedStringUUID);
                 return true;
             }
             return false;
-        }
-
-        public static void PlayAudio(string path)
-        {
-            Log($"Playing audio from path '{path}'");
-
-            using var message = new MessageWriteable(MessageType.PlayAudio);
-            message.Write(path);
-            message.TrySend(playerPipeClient);
-        }
-
-        public static void PlayRecipe(string uuid)
-        {
-            Log($"Playing recipe for UUID '{uuid}'");
-
-            var playerUnit = Game.Instance.DialogController?.ActingUnit ?? Game.Instance.Player?.MainCharacter;
-            var gender = playerUnit == null 
-                ? (new System.Random().Next(2) == 0 ? Gender.Male : Gender.Female)
-                : playerUnit.Gender;
-
-            using var message = new MessageWriteable(MessageType.PlayRecipe);
-            message.Write(uuid);
-            message.Write((int)gender);
-            message.Write(Game.Instance.Player.PlayerIsKing);
-            message.TrySend(playerPipeClient);
-        }
-
-        public static void StopAudio()
-        {
-            Log($"Stoping audio (and recipe)");
-
-            new MessageWriteable(MessageType.StopAudio).TrySend(playerPipeClient);
-
-            if (onEnd != null)
-            {
-                onEnd(null, null);
-                onEnd = null;
-            }
         }
     }
 }

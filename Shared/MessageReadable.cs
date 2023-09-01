@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace MoreVoiceLines.IPC
@@ -61,7 +62,7 @@ namespace MoreVoiceLines.IPC
             base.Dispose();
         }
 
-        public async Task ReceiveAsync(Stream inputStream)
+        public async Task ReceiveAsync(Stream inputStream, CancellationToken cancellationToken)
         {
             var inputBuffer = GetBuffer();
             var receivedLength = 0;
@@ -69,8 +70,13 @@ namespace MoreVoiceLines.IPC
             // Read at least message type & length (incl. this header)
             do
             {
-                var more = await inputStream.ReadAsync(inputBuffer, receivedLength, inputBuffer.Length - receivedLength);
-                if (more == 0) return; // end of stream
+                var more = await inputStream.ReadAsync(inputBuffer, receivedLength, inputBuffer.Length - receivedLength, cancellationToken);
+                if (more == 0)
+                {
+                    Type = MessageType.Disconnected;
+                    Length = sizeof(int) * 2;
+                    return; // end of stream 
+                }
                 receivedLength += more;
             }
             while (receivedLength < sizeof(int) * 2);
@@ -81,8 +87,12 @@ namespace MoreVoiceLines.IPC
             // TODO: handle messages larger than default input buffer length by resizing the buffer
             while (receivedLength < messageLength && receivedLength < inputBuffer.Length)
             {
-                var more = await inputStream.ReadAsync(inputBuffer, receivedLength, inputBuffer.Length - receivedLength);
-                if (more == 0) return; // end of stream (but shouldn't it throw if mid-message?)
+                var more = await inputStream.ReadAsync(inputBuffer, receivedLength, inputBuffer.Length - receivedLength, cancellationToken);
+                if (more == 0) {
+                    Type = MessageType.Disconnected;
+                    Length = receivedLength;
+                    return; // end of stream (but shouldn't it throw if mid-message?)
+                }
                 receivedLength += more;
             }
 

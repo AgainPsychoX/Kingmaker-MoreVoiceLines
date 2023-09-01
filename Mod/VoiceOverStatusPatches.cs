@@ -1,12 +1,5 @@
 ﻿using HarmonyLib;
-using JetBrains.Annotations;
 using Kingmaker.Localization;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using UnityEngine;
 
 namespace MoreVoiceLines
 {
@@ -17,7 +10,7 @@ namespace MoreVoiceLines
         {
             static bool Prefix()
             {
-                MoreVoiceLines.StopAudio();
+                ExternalAudioPlayer.StopAudio();
                 return true;
             }
         }

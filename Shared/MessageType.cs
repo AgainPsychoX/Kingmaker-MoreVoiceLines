@@ -5,14 +5,13 @@ namespace MoreVoiceLines.IPC
     {
         /// <summary>
         /// Special value to indicate message type is unknown. 
-        /// If returned to message handling, means the other side disconnected.
         /// </summary>
         Unknown = 0,
 
         /// <summary>
         /// If returned to message handling, means the other side disconnected.
         /// </summary>
-        Disconnected = Unknown,
+        Disconnected,
 
         /// <summary>
         /// No operation, no parameters, returns nothing.

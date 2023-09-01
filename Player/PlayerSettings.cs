@@ -14,11 +14,6 @@ namespace MoreVoiceLines
         public float SpeedRatio = 1f;
         public float Pitch = 1f;
 
-        /// <summary>
-        /// If true, extra debugging logging is done, and audio player process console window is shown.
-        /// </summary>
-        public bool Debug = true;
-
         public static PlayerSettings Load()
         {
             using FileStream stream = File.OpenRead(Path.Combine(PlayerProgram.GetDirectory(), "../Settings.xml"));
