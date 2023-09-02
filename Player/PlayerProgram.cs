@@ -52,16 +52,19 @@ namespace MoreVoiceLines
             }
             Log($"Loaded {localizedStringUuidToRecipe.Count} localized string UUIDs with voice recipes");
 
-            // Open the server pipe to allow requests from the game
-            pipeServer = new NamedPipeServerStream("MoreVoiceLinesPlayer", PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
-            Log("Audio player pipe server started");
+            var cancellationToken = serverCancellationTokenSource.Token;
 
-            pipeServer.WaitForConnection();
-            Log("Game-side connected");
+            // Wait for connection to handle incoming requests from the game
+            {
+                pipeServer = new NamedPipeServerStream("MoreVoiceLinesPlayer", PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+                Log("Audio player pipe server started");
+
+                await pipeServer.WaitForConnectionAsync(cancellationToken);
+                Log("Game-side connected");
+            }
 
             // Connect to game-side to notify about stuff, like audio finished
             {
-                //await Task.Delay(500);
                 gamePipeClient = new(".", "MoreVoiceLines", PipeDirection.InOut, PipeOptions.Asynchronous, TokenImpersonationLevel.None);
                 Log($"Trying to connect to game-side client pipe...");
                 var stopwatch = Stopwatch.StartNew();
@@ -69,15 +72,15 @@ namespace MoreVoiceLines
                 {
                     try
                     {
-                        await Task.Delay(100);
-                        await gamePipeClient.ConnectAsync(100);
+                        await Task.Delay(100, cancellationToken);
+                        await gamePipeClient.ConnectAsync(100, cancellationToken);
                     }
                     catch (Exception ex)
                     {
                         LogDebug($"Failed to connect to game-side client pipe ({stopwatch.ElapsedMilliseconds}ms)");
                         if (stopwatch.ElapsedMilliseconds > 5000)
                         {
-                            LogError($"Failed to connect game-side client pipe");
+                            LogError($"Failed to connect game-side client pipe, ignoring");
                             LogException(ex);
                             break;
                         }
@@ -90,14 +93,16 @@ namespace MoreVoiceLines
             }
 
             // Handle incoming messages
-            var serverCancellationToken = serverCancellationTokenSource.Token;
             while (pipeServer.IsConnected)
             {
-                await HandleMessage(pipeServer, pipeServer, serverCancellationToken);
-            }   
+                await HandleMessage(pipeServer, pipeServer, cancellationToken);
+            }
 
             pipeServer.Close();
             Log("Pipe server closed");
+
+            gamePipeClient.Close();
+            Log("Game-side client pipe closed");
 
             audioPlaybackEngine.Dispose();
         }

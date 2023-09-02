@@ -5,6 +5,22 @@ It was a wild ride for me, and tips/scripts here are rather vague, but maybe som
 
 
 
+### Summary
+
+I exported existing voice files for certain character, used them to fine-tune Text-To-Speech model. Then I made list of dialogues that have no voice lines defined and ran long generation process. Maybe in future one could try use other base models and/or different training/generating parameters. I don't think it's possible to train model from scratch, as there is a bit too little existing voice lines (about half hour total for Jaethal). For other NPCs that already have partial voice lines (like Nyrissa), there might be even less existing samples, so the quality even of the current fine-tunning method would be worse. Lastly, for NPCs with no (or almost no) existing voice lines one could just generate random voices.
+
+#### Work time used:
+
+It took me about 2 full week to figure out stuff about AI voice generation/TTS, develop scripts & the mod. To add more companions it would take like few days, if this "guide" was to be followed. Other NPCs would take much longer, the number alone would require organizational efforts.
+
+#### GPU usage 
+
+Around 20$ worth of GPU time ([Vast.AI](https://vast.ai/)) was used for Jaethal alone. If streamlined could be like 10$ per other companions. Other NPCs are much less, but there is countless of them.
+
+
+
+---
+
 ### Exporting from game files
 
 Assets required:
@@ -66,13 +82,13 @@ Then, the samples need to be cut. I did a lot of cutting manually to get best re
 
 ### Text-To-Speech / Speech-To-Text
 
-At first I tried using raw Tortoise TTS and Fast Tortoise TTS, but it took too long for not-so-great results - but it was because I use my local GPU (RTX 2060 Laptop). I read a lot about Coqui TTS (whole framework with multiple models) but it feels "too big". Shortly after I stumbled upon [Tortoise TTS based model with WebUI by mrq](https://git.ecker.tech/mrq/ai-voice-cloning), following tutorial [by Jarods Journey on YouTube](https://www.youtube.com/watch?v=6sTsqSQYIzs). It was easy enough to train and use, even training locally for few hours I got some results.
+At first I tried using raw Tortoise TTS and Fast Tortoise TTS, but it took too long for not-so-great results - but it was because I use my local GPU (RTX 2060 Laptop). I read a lot about Coqui TTS (whole framework with multiple models) but it feels "too big". Shortly after I stumbled upon [Tortoise TTS based model with WebUI by MRQ](https://git.ecker.tech/mrq/ai-voice-cloning), following tutorial [by Jarods Journey on YouTube](https://www.youtube.com/watch?v=6sTsqSQYIzs). It was easy enough to train and use, even training locally for few hours I got some results.
 
 It also includes Speech-To-Text and cutting utility, which I used to prepare dataset using the voices, and later cross-validated it with the metadata I prepared earlier using `compare-transcribed.ps1`, and I went fixing prepared by the WebUI tool the  `whisper.json` and `train.txt` files.
 
 ### Fine-tunning
 
-To fine-tune the model (and later also generate all the new voice lines) in reasonable time, which provides much better results cloning voice than basic zero-shot approach, I rented GPUs at [Vast.AI](https://vast.ai/). 
+To fine-tune the model (and later also generate all the new voice lines) in reasonable time, which provides much better results cloning voice than basic zero-shot approach, I rented GPUs at [Vast.AI](https://vast.ai/), with at least 50 GB diskspace, but use more to be safe - especially if you want to playaround with different settings/models. Don't forget to free the diskspace, as the WebUI by MRQ doesn't clean up stuff automatically.
 
 For Jaethal model fine-tunning, as far I remember, with around 400 audio files each around 10s, I used cosine annealing with 2 or 4 resets, 100 epochs, saving/validating every 10 or 20; taking up to few hours.
 

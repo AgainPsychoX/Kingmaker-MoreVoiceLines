@@ -1,13 +1,13 @@
 ﻿using System;
 using System.Reflection;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+using System.Diagnostics;
 using UnityEngine;
 using UnityModManagerNet;
 using HarmonyLib;
 using Kingmaker.Utility;
-using MoreVoiceLines.IPC;
-using System.Collections.Generic;
 
 namespace MoreVoiceLines
 {
@@ -28,22 +28,29 @@ namespace MoreVoiceLines
 
             guiSelectedPathOrUUID = Path.Combine(GetDirectory(), "test", "Prologue_Jaethal_01.wav");
 
-            var harmony = new Harmony(modEntry.Info.Id);
-            harmony.PatchAll(Assembly.GetExecutingAssembly());
-
-            LoadAudioMetadata();
-            Task.Run(ExternalAudioPlayer.Initialize);
-
             return true;
         }
 
         static bool OnToggle(UnityModManager.ModEntry modEntry, bool value)
         {
             Enabled = value;
+            if (Enabled)
+            {
+                var harmony = new Harmony(modEntry.Info.Id);
+                harmony.PatchAll(Assembly.GetExecutingAssembly());
+
+                LoadAudioMetadata();
+                Task.Run(ExternalAudioPlayer.Initialize);
+            }
+            else
+            {
+                Task.Run(ExternalAudioPlayer.Stop);
+            }
             return true;
         }
 
         static string guiSelectedPathOrUUID = "";
+        static int gamePID = Process.GetCurrentProcess().Id;
 
         static void OnGUI(UnityModManager.ModEntry modEntry)
         {
@@ -89,31 +96,35 @@ namespace MoreVoiceLines
             GUILayout.Space(10);
 
             GUILayout.BeginHorizontal();
-            GUILayout.Label(new GUIContent("Debug mode (might require game restart)", 
+            GUILayout.Label(new GUIContent("Debug mode", 
                 "Does more debug logging, might produce clog after long gaming sessions.\n"), 
                 GUILayout.ExpandWidth(false));
             GUILayout.Space(10);
             Settings.Debug = GUILayout.Toggle(Settings.Debug, $" {Settings.Debug}", GUILayout.ExpandWidth(false));
             GUILayout.EndHorizontal();
 
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Restart audio player", GUILayout.ExpandWidth(false)))
-            {
-                Task.Run(ExternalAudioPlayer.Initialize);
-            }
-            if (GUILayout.Button("Reload audio metadata", GUILayout.ExpandWidth(false)))
-            {
-                LoadAudioMetadata();
-            }
-            GUILayout.EndHorizontal();
-
             if (Settings.Debug)
             {
                 GUILayout.BeginHorizontal();
-                GUILayout.Label("Kill all audio player processes on (re)start", GUILayout.ExpandWidth(false));
+                GUILayout.Label($"State: {ExternalAudioPlayer.State} · Game PID: {gamePID} · Audio Player PID: {ExternalAudioPlayer.PID}", GUILayout.ExpandWidth(false));
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button("Restart audio player", GUILayout.ExpandWidth(false)))
+                {
+                    LoadAudioMetadata();
+                    Task.Run(ExternalAudioPlayer.Initialize);
+                }
+                GUILayout.EndHorizontal();
+
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Kill all audio player processes before spawning new one", GUILayout.ExpandWidth(false));
                 GUILayout.Space(10);
                 Settings.KillAllAudioPlayerProcesses = GUILayout.Toggle(Settings.KillAllAudioPlayerProcesses, 
                     $" {Settings.KillAllAudioPlayerProcesses}", GUILayout.ExpandWidth(false));
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button("Kill all audio players now", GUILayout.ExpandWidth(false)))
+                {
+                    Task.Run(ExternalAudioPlayer.KillAllProcesses);
+                }
                 GUILayout.EndHorizontal();
             }
         }

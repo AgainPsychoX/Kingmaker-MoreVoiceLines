@@ -22,36 +22,57 @@ namespace MoreVoiceLines
 
         public enum AudioPlayerState
         {
-            STARTING,
-            CONNECTING,
-            RUNNING,
-            STOPPING,
-            STOPPED,
-            CRASHED,
+            Starting,
+            Connecting,
+            Running,
+            Stopping,
+            Stopped,
         }
 
         static CancellationTokenSource cancellationTokenSource = new();
         static Process playerProcess;
         static NamedPipeClientStream playerPipeClient;
-        static NamedPipeServerStream gamePipeServer;
-        static volatile AudioPlayerState state = AudioPlayerState.STOPPED;
+        static volatile NamedPipeServerStream gamePipeServer;
+        static volatile AudioPlayerState state = AudioPlayerState.Stopped;
+        static Thread serverStoppingThread;
 
         public static AudioPlayerState State
         {
             get => state;
         }
 
+        public static int PID
+        {
+            get {
+                try { return playerProcess?.Id ?? 0; }
+                catch { return 0; }
+            }
+        }
+
         /// <summary>
-        /// Intializes the player (or re-initializes if already running).
+        /// Task to intializes the player (or re-initializes if already running).
         /// </summary>
         public static async Task Initialize()
         {
+            if (state == AudioPlayerState.Starting)
+            {
+                LogWarning("Already starting, cannot reinitialize in middle of initialization");
+                return; 
+            }
+            
+            // Try clean up previous state
             await Stop();
-
             if (Settings.KillAllAudioPlayerProcesses)
             {
                 await KillAllProcesses();
             }
+            if (playerProcess != null && !playerProcess.HasExited)
+            {
+                LogError("Failed to kill the previous audio player process, cannot reinitialize; Try restarting the game");
+                return;
+            }
+
+            state = AudioPlayerState.Starting;
 
             // Start new audio player process
             LogDebug($"Starting the player process...");
@@ -87,38 +108,34 @@ namespace MoreVoiceLines
             }
             LogDebug($"Started the player process ID={playerProcess.Id}");
 
-            await IPC();
+            _ = Task.Run(IPC);
         }
 
         /// <summary>
-        /// Signals to stop the external audio player.
+        /// Signals to stop the audio player.
         /// </summary>
         public static async Task Stop()
         {
-            if (state is not AudioPlayerState.STOPPED or AudioPlayerState.CRASHED)
+            if (state != AudioPlayerState.Stopped)
             {
                 LogDebug("Stopping IPC");
                 cancellationTokenSource.Cancel();
 
+                // Try inform the audio player process
+                new MessageWriteable(MessageType.Exit).TrySend(playerPipeClient);
+
                 // Wait for peaceful stop
                 var stopwatch = Stopwatch.StartNew();
-                await Task.Delay(250);
                 do
                 {
                     await Task.Delay(500);
-                    if (stopwatch.ElapsedMilliseconds > 10000)
+                    if (stopwatch.ElapsedMilliseconds > 5000)
                     {
                         LogError("IPC task not responding to cancel signal");
                         return;
                     }
                 }
-                while (state is not AudioPlayerState.STOPPED and not AudioPlayerState.CRASHED);
-
-                if (state is AudioPlayerState.CRASHED)
-                {
-                    LogWarning("Crashed while stopping"); // but stopped nevertheless
-                    return;
-                }
+                while (state != AudioPlayerState.Stopped);
 
                 LogDebug("Stopped IPC");
                 cancellationTokenSource = new();
@@ -126,7 +143,11 @@ namespace MoreVoiceLines
             }
         }
 
-        static async Task KillAllProcesses()
+        /// <summary>
+        /// Uses Windows built-in `taskkill.exe` to kill all `MoreVoiceLinesPlayer.exe` that might be hanging 
+        /// in the background, including ones from other game instances (if you run multiple instances somehow).
+        /// </summary>
+        public static async Task KillAllProcesses()
         {
             Log($"Killing existing player process(es)...");
 
@@ -149,7 +170,6 @@ namespace MoreVoiceLines
             killerProcess.Start();
 
             // Output to game logs
-            killerProcess.BeginOutputReadLine();
             while (!killerProcess.StandardOutput.EndOfStream)
             {
                 LogDebug("[taskkill.exe] " + killerProcess.StandardOutput.ReadLine());
@@ -163,12 +183,33 @@ namespace MoreVoiceLines
             while (!killerProcess.WaitForExit(100));
         }
 
+        /// <summary>
+        /// Task handling Inter-Process-Communications between the game (the mod) and the external audio player 
+        /// (used by the mod). Two bidirectional named pipes are set up - one each way - processing requests 
+        /// and responding if necessary. After connecting the client pipe and setting up the server pipe, 
+        /// the task keeps running handling incoming messages.
+        /// </summary>
         static async Task IPC()
         {
-            Log($"Connecting IPC...");
-            state = AudioPlayerState.CONNECTING;
+            /* Asynchronous named pipes are not fully implemented or bugged in Unity
+             * (or at least the server, or at least this project, or I don't know how to use them...)
+             * 
+             * `await playerPipeClient.ConnectAsync(100);` -> throws not implemented.
+             * `await gamePipeServer.WaitForConnectionAsync(cancellationToken);` -> thows not implemented,
+             *      or `ERROR_PIPE_LISTENING` == `0x0218`: "Waiting for a process to open the other end of the pipe".
+             * `new NamedPipeServerStream(..., 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);`
+             *      -> fails on non-async `WaitForConnect` as well (`ERROR_PIPE_LISTENING`).
+             * 
+             * Therefore, as workaround, synchronized server pipe is used with synchronized waiting for connection,
+             * along with separate task that, crates fake client to stop the wait if necessary.
+             * I tried using `cancellationToken.Register(gamePipeServer.Close))` approach too, but it still failed.
+             * 
+             * Inspiration: https://stackoverflow.com/a/61112728/4880243, https://stackoverflow.com/a/1191677/4880243
+             */
 
-            bool didCrash = false;
+            Log($"Connecting IPC...");
+            state = AudioPlayerState.Connecting;
+
             var cancellationToken = cancellationTokenSource.Token;
             try
             {
@@ -183,7 +224,6 @@ namespace MoreVoiceLines
                         {
                             await Task.Delay(100, cancellationToken);
                             playerPipeClient.Connect(100);
-                            //await playerPipeClient.ConnectAsync(100); // async not implemented, wtf?
                         }
                         catch (TaskCanceledException)
                         {
@@ -198,28 +238,69 @@ namespace MoreVoiceLines
                             }
                         }
                     }
-                    Log($"Audio player pipe connected");
+                    var serverProcessId = NamedPipesUtils.GetNamedPipeServerProcessId(playerPipeClient);
+                    Log($"Audio player client pipe connected to server process (PID {serverProcessId})");
                 }
 
-                // Open the server pipe to get notified about stuff, like audio finishing
+                // Open the server pipe and wait for connection to get notified about stuff like audio finishing
                 {
-                    gamePipeServer = new NamedPipeServerStream("MoreVoiceLines", PipeDirection.InOut); // Beware! Async pipes are bugged/not implemented, fucking Unity...
+                    // Setup thread for workaround for async pipe server issue
+                    LogDebug("[NoAsyncServerWorkaround] Setting up task to close the pipe server on cancellation");
+                    serverStoppingThread = new Thread(() =>
+                    {
+                        cancellationToken.WaitHandle.WaitOne();
+                        LogDebug("[NoAsyncServerWorkaround] Cancellation in effect");
+
+                        if (gamePipeServer != null)
+                        {
+                            if (state == AudioPlayerState.Connecting)
+                            {
+                                LogDebug("[NoAsyncServerWorkaround] Connecting fake client to the pipe server");
+                                using (NamedPipeClientStream fake = new("MoreVoiceLines"))
+                                {
+                                    try
+                                    {
+                                        fake.Connect(1000);
+                                    }
+                                    catch
+                                    {
+                                        LogDebug("[NoAsyncServerWorkaround] Failed to connect fake client");
+                                    }
+                                }
+                            }
+
+                            if (gamePipeServer.IsConnected)
+                            {
+                                // Note: Might still hang here, as sync read must be stopped somehow else?
+                                //  Yet, with exit message to audio player process it works good enough I hope.
+                                LogDebug("[NoAsyncServerWorkaround] Disconnecting");
+                                gamePipeServer.Disconnect();
+                                LogDebug("[NoAsyncServerWorkaround] Disconnected");
+                            }
+                        }
+                    });
+                    serverStoppingThread.Start();
+
+                    // Actually open the pipe server
+                    gamePipeServer = new NamedPipeServerStream("MoreVoiceLines", PipeDirection.InOut);
                     Log("Game-side pipe server started");
-                    gamePipeServer.WaitForConnection(); // TODO: How to stop if stuck here? Need to kill thread, no?
+                    gamePipeServer.WaitForConnection();
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (!gamePipeServer.IsConnected)
                     {
                         throw new Exception("Server pipe not connected after waiting for connection");
                     }
-                    Log("Audio player connected");
+                    var clientProcessId = NamedPipesUtils.GetNamedPipeClientProcessId(gamePipeServer);
+                    Log($"Game-side server pipe got connection from client process (PID {clientProcessId})");
                 }
 
                 // Main loop, handling next messages
-                state = AudioPlayerState.RUNNING;
+                state = AudioPlayerState.Running;
                 while (gamePipeServer.IsConnected && !cancellationToken.IsCancellationRequested)
                 {
                     await HandleMessage(gamePipeServer, gamePipeServer, cancellationToken);
                 }
-                state = AudioPlayerState.STOPPING;
+                state = AudioPlayerState.Stopping;
 
                 // Jump to cancellation handler below, to avoid doubling code (yes, exception-driven logic... High level languages XD)
                 throw new TaskCanceledException();
@@ -227,13 +308,12 @@ namespace MoreVoiceLines
             catch (TaskCanceledException)
             {
                 Log("IPC cancelled");
-                state = AudioPlayerState.STOPPING;
+                state = AudioPlayerState.Stopping;
             }
             catch (Exception ex)
             {
                 LogError("IPC failed");
                 LogException(ex);
-                didCrash = true;
             }
             finally
             {
@@ -251,23 +331,25 @@ namespace MoreVoiceLines
                     gamePipeServer = null;
                 }
 
-                // Kill player process after delay if it's still up
-                for (int i = 0; i < 10; i++)
-                {
-                    playerProcess.WaitForExit(100);
-                    await Task.Yield();
-                }
-                if (!playerProcess.WaitForExit(1))
+                // Stop server stopping thread if it's still up somehow
+                serverStoppingThread.Join(100);
+                serverStoppingThread.Abort();
+
+                // Kill player process after delay if it's still up somehow
+                if (!playerProcess.WaitForExit(1000))
                 {
                     LogWarning("Audio player process long alive after pipes closed, killing");
                     playerProcess.Kill();
                 }
                 playerProcess = null;
 
-                state = didCrash ? AudioPlayerState.CRASHED : AudioPlayerState.STOPPED;
+                state = AudioPlayerState.Stopped;
             }
         }
 
+        /// <summary>
+        /// Handles messages (well, from the external audio player connected to local server pipe).
+        /// </summary>
         static async Task HandleMessage(Stream input, Stream output, CancellationToken cancellationToken)
         {
             using var message = new MessageReadable();
@@ -280,6 +362,7 @@ namespace MoreVoiceLines
                 case MessageType.Disconnected:
                 case MessageType.Exit:
                     playerPipeClient.Close();
+                    cancellationTokenSource.Cancel();
                     gamePipeServer.Disconnect();
                     return;
                 case MessageType.FinishedAudio:
@@ -311,6 +394,10 @@ namespace MoreVoiceLines
             }
         }
 
+        /// <summary>
+        /// Signals to start playing specified audio.
+        /// </summary>
+        /// <param name="path">Path to the audio to play</param>
         public static void PlayAudio(string path)
         {
             Log($"Playing audio from path '{path}'");
@@ -320,6 +407,10 @@ namespace MoreVoiceLines
             message.TrySend(playerPipeClient);
         }
 
+        /// <summary>
+        /// Signals to start playing specified voice-line recipe.
+        /// </summary>
+        /// <param name="uuid">LocalizedString UUID</param>
         public static void PlayRecipe(string uuid)
         {
             Log($"Playing recipe for UUID '{uuid}'");
@@ -336,6 +427,9 @@ namespace MoreVoiceLines
             message.TrySend(playerPipeClient);
         }
 
+        /// <summary>
+        /// Signals to stop playing audio (effectively also stops recipe).
+        /// </summary>
         public static void StopAudio()
         {
             Log($"Stoping audio (and recipe)");
@@ -349,6 +443,10 @@ namespace MoreVoiceLines
             }
         }
 
+        /// <summary>
+        /// Singals the external audio player that settings file was updated, 
+        /// which might include update to playback parameters like volume etc.
+        /// </summary>
         internal static void SettingsUpdated()
         {
             new MessageWriteable(MessageType.SettingsUpdated).TrySend(playerPipeClient);

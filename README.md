@@ -1,7 +1,11 @@
 
 # More Voice Lines for Pathfinder: Kingmaker
 
-This is modification for [Pathfinder: Kingmaker](https://store.steampowered.com/app/640820/Pathfinder_Kingmaker__Enhanced_Plus_Edition/). Uses [Unity Mod Manager](https://www.nexusmods.com/site/mods/21) and [0Harmony](https://harmony.pardeike.net/).
+This is modification for [Pathfinder: Kingmaker](https://store.steampowered.com/app/640820/Pathfinder_Kingmaker__Enhanced_Plus_Edition/). Uses [Unity Mod Manager](https://www.nexusmods.com/site/mods/21) and [0Harmony](https://harmony.pardeike.net/). Audio files along with some configuration are required. 
+
+**You can [download the mod from Nexus Mods](https://www.nexusmods.com/pathfinderkingmaker/mods/292).**
+
+For now, only Jaethal voice lines are done (at least by me), but you are free to contact me via GitHub Issues or e-mail if you want to contribute more. The repository also includes [notes on voice clonning & script](./Other/VoiceCloningStuff/README.md) I used for generating Jaethal.
 
 
 
@@ -26,8 +30,7 @@ This is modification for [Pathfinder: Kingmaker](https://store.steampowered.com/
 + Replace dialogues referencing player character name by something more generic (for now it's fixed to use my character Elizabeth).
 + External audio player
     + Ensure single instance (already can be done by the game-side)
-	+ Kill after game exits
-	+ Allow restart while in-game? WIP
+	+ Kill after game exits (should work already, but I want to be extra sure, so need to add some more hooks)
 + Add pitch setting
 + Add speed setting
 + Allow skip part of the voice line using space, if possible using speed up

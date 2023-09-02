@@ -13,9 +13,6 @@ namespace MoreVoiceLines
         [DllImport("kernel32.dll", SetLastError = true)]
         internal static extern bool GetNamedPipeClientProcessId(IntPtr Pipe, out int ClientProcessId);
 
-        [DllImport("kernel32.dll", SetLastError = true)]
-        internal static extern bool GetNamedPipeServerProcessId(IntPtr Pipe, out int ServerProcessId);
-
         public static int GetNamedPipeClientProcessId(NamedPipeServerStream pipeServer)
         {
             var hPipe = pipeServer.SafePipeHandle.DangerousGetHandle();
@@ -30,6 +27,11 @@ namespace MoreVoiceLines
                 throw new Exception("Failed to get named pipe client process ID");
             }
         }
+
+
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern bool GetNamedPipeServerProcessId(IntPtr Pipe, out int ServerProcessId);
 
         public static int GetNamedPipeServerProcessId(NamedPipeClientStream pipeClient)
         {
