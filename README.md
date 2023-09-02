@@ -26,11 +26,9 @@ This is modification for [Pathfinder: Kingmaker](https://store.steampowered.com/
 
 + Add detecting missing dialogues to the mod; save to file and keep showing "notification" on the mod settings asking user to upload their logs/update the mod.
 + Replace dialogues referencing player character name by something more generic (for now it's fixed to use my character Elizabeth).
-+ External audio player
-    + Ensure single instance (already can be done by the game-side)
-	+ Kill after game exits (should work already, but I want to be extra sure, so need to add some more hooks)
 + Add pitch setting
 + Add speed setting
++ Add [re-focus](https://stackoverflow.com/questions/25578305/c-sharp-focus-window-of-a-runing-program) option, as sometimes game window doesn't get focus, maybe because conosle window (even if hidden) blinks.
 + Allow skip part of the voice line using space, if possible using speed up
 
 

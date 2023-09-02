@@ -1,12 +1,13 @@
 ﻿using System;
+using System.Linq;
 using System.IO;
 using System.IO.Pipes;
 using System.Reflection;
 using System.Security.Principal;
 using System.Threading;
+using System.Diagnostics;
 using NAudio.Wave;
 using MoreVoiceLines.IPC;
-using System.Diagnostics;
 
 namespace MoreVoiceLines
 {
@@ -35,8 +36,22 @@ namespace MoreVoiceLines
         {        
             settings = PlayerSettings.Load();
 
-            // TODO: keep only one instance alive
-            // TODO: suicide if no comms from the mod
+            if (!args.Contains("--no-suicide"))
+            {
+                // Start "suicide" task that ensures the process exits 
+                var suicideThread = new Thread(() =>
+                {
+                    Thread.Sleep(1000);
+                    if (Process.GetProcessesByName("Kingmaker").Length == 0)
+                    {
+                        Log($"Kingmaker exited, stopping the audio player too");
+                        serverCancellationTokenSource.Cancel();
+                        Thread.Sleep(1000); // a bit of time for peaceful exit
+                        Environment.Exit(0);
+                    }
+                });
+                suicideThread.Start();
+            }
 
             // Load dialog UUID to recipe mapping
             localizedStringUuidToRecipe.Clear();
@@ -59,7 +74,14 @@ namespace MoreVoiceLines
                 pipeServer = new NamedPipeServerStream("MoreVoiceLinesPlayer", PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
                 Log("Audio player pipe server started");
 
-                await pipeServer.WaitForConnectionAsync(cancellationToken);
+                try
+                {
+                    await pipeServer.WaitForConnectionAsync(cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                } 
                 Log("Game-side connected");
             }
 
