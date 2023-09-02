@@ -243,7 +243,7 @@ namespace MoreVoiceLines
                         }
                     }
                     var serverProcessId = NamedPipesUtils.GetNamedPipeServerProcessId(playerPipeClient);
-                    Log($"Audio player client pipe connected to server process (PID {serverProcessId})");
+                    LogDebug($"Audio player client pipe connected to server process (PID {serverProcessId})");
                 }
 
                 // Open the server pipe and wait for connection to get notified about stuff like audio finishing
@@ -287,7 +287,7 @@ namespace MoreVoiceLines
 
                     // Actually open the pipe server
                     gamePipeServer = new NamedPipeServerStream("MoreVoiceLines", PipeDirection.InOut);
-                    Log("Game-side pipe server started");
+                    LogDebug("Game-side pipe server started");
                     gamePipeServer.WaitForConnection();
                     cancellationToken.ThrowIfCancellationRequested();
                     if (!gamePipeServer.IsConnected)
@@ -295,10 +295,11 @@ namespace MoreVoiceLines
                         throw new Exception("Server pipe not connected after waiting for connection");
                     }
                     var clientProcessId = NamedPipesUtils.GetNamedPipeClientProcessId(gamePipeServer);
-                    Log($"Game-side server pipe got connection from client process (PID {clientProcessId})");
+                    LogDebug($"Game-side server pipe got connection from client process (PID {clientProcessId})");
                 }
 
                 // Main loop, handling next messages
+                Log("IPC ready");
                 state = AudioPlayerState.Running;
                 while (gamePipeServer.IsConnected && !cancellationToken.IsCancellationRequested)
                 {
