@@ -80,15 +80,19 @@ namespace MoreVoiceLines
             {
                 WorkingDirectory = Path.Combine(GetDirectory(), "player"),
                 FileName = Path.Combine(GetDirectory(), "player/MoreVoiceLinesPlayer.exe"),
-
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
             };
             if (!Settings.ShowAudioPlayerConsoleWindow)
             {
-                // This will still blink for a second. The `UseShellExecute` needs to be `true` for hidden start,
-                // but `false` for logging output.
+                if (Settings.Debug)
+                {
+                    // Console output is redirected to the in-game mod logs, only when hidden (empty console is useless)
+                    playerProcessStartInfo.UseShellExecute = false;
+                    playerProcessStartInfo.RedirectStandardOutput = true;
+                    playerProcessStartInfo.RedirectStandardError = true;
+                }
+
+                // This still might blink for a second. The `UseShellExecute` needs to be `true` for hidden start,
+                // but `false` for logging redirection.
                 playerProcessStartInfo.WindowStyle = ProcessWindowStyle.Hidden;
                 playerProcessStartInfo.CreateNoWindow = true;
             }
@@ -96,13 +100,13 @@ namespace MoreVoiceLines
             {
                 StartInfo = playerProcessStartInfo,
             };
-            if (Settings.Debug)
+            if (playerProcessStartInfo.RedirectStandardOutput)
             {
                 playerProcess.OutputDataReceived += (sender, args) => LogRaw("[AudioPlayer] " + args.Data);
                 playerProcess.ErrorDataReceived += (sender, args) => LogRaw("[AudioPlayer (stderr)] " + args.Data);
             }
             playerProcess.Start();
-            if (Settings.Debug)
+            if (playerProcessStartInfo.RedirectStandardOutput)
             {
                 playerProcess.BeginOutputReadLine();
             }

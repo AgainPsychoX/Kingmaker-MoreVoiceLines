@@ -97,7 +97,7 @@ namespace MoreVoiceLines
 
             GUILayout.BeginHorizontal();
             GUILayout.Label(new GUIContent("Debug mode", 
-                "Does more debug logging, might produce clog after long gaming sessions.\n"), 
+                "Does more debug logging, might produce clog after long gaming sessions. Some settings require restart.\n"), 
                 GUILayout.ExpandWidth(false));
             GUILayout.Space(10);
             Settings.Debug = GUILayout.Toggle(Settings.Debug, $" {Settings.Debug}", GUILayout.ExpandWidth(false));
@@ -125,6 +125,13 @@ namespace MoreVoiceLines
                 {
                     Task.Run(ExternalAudioPlayer.KillAllProcesses);
                 }
+                GUILayout.EndHorizontal();
+
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Show the external audio player console window", GUILayout.ExpandWidth(false));
+                GUILayout.Space(10);
+                Settings.ShowAudioPlayerConsoleWindow = GUILayout.Toggle(Settings.ShowAudioPlayerConsoleWindow,
+                    $" {Settings.ShowAudioPlayerConsoleWindow}", GUILayout.ExpandWidth(false));
                 GUILayout.EndHorizontal();
             }
         }
