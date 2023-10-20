@@ -28,7 +28,7 @@ Assets required:
 + game blueprints dump: https://github.com/xADDBx/KingmakerDataminer/releases/
 + `LocalizedStrings` directory copied from `StreamingAssets`.
 
-Use `export-to-wavs.ps1` to convert WEM files for given character as WAVs from `%GAME_DIR%\Kingmaker_Data\StreamingAssets\Audio\GeneratedSoundBanks\Windows`, using [`vgmstream`](https://github.com/vgmstream/vgmstream/releases).
+Use `export-to-wavs.ps1` to convert WEM files for given character as WAVs from `%GAME_DIR%\Kingmaker_Data\StreamingAssets\Audio\GeneratedSoundBanks\Windows`, using [`vgmstream`](https://github.com/vgmstream/vgmstream/releases). Edit the paths inside the script as necessary. 
 
 ### Filter useful files 
 
